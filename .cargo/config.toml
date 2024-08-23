@@ -1,0 +1,12 @@
+[target.thumbv7em-none-eabihf]
+runner = "probe-rs run --chip STM32F303VCTx --chip-description-path stm32f3xx.yaml"
+
+rustflags = [
+#   "-C", "linker=flip-link",
+  "-C", "link-arg=-Tlink.x",
+  "-C", "link-arg=-Tdefmt.x",
+  "-C", "link-arg=--nmagic",
+]
+
+[build]
+target = "thumbv7em-none-eabihf"
