@@ -8,6 +8,21 @@ pub enum Sts32_33DisError<E> {
     I2C(E),
 }
 
+#[derive(Debug, PartialEq)]
+pub enum Repeatability {
+    Low,
+    Medium,
+    High,
+}
+
+pub enum Mps {
+    _0_5,
+    _1,
+    _2,
+    _4,
+    _10
+}
+
 #[bitfield(u16, order = Msb)]
 pub struct StatusRegister {
     #[bits(1, access = RO)]
@@ -59,5 +74,57 @@ where
         self.i2c.read(self.address, &mut data).map_err(|e| Sts32_33DisError::I2C(e))?;
 
         Ok(StatusRegister::from(u16::from_be_bytes([data[0], data[1]])))
+    }
+
+    // FIXME: pub と non-pub をイイ感じにする
+    pub fn start_periodic_measurement(&mut self, repeatability: Repeatability, mps: Mps) -> Result<(), Sts32_33DisError<E>> {
+        let msb = match mps {
+            Mps::_0_5 => 0x20,
+            Mps::_1 => 0x21,
+            Mps::_2 => 0x22,
+            Mps::_4 => 0x23,
+            Mps::_10 => 0x27,
+        };
+
+        let lsb = match (repeatability, mps) {
+            (Repeatability::High, Mps::_0_5) => 0x32,
+            (Repeatability::Medium, Mps::_0_5) => 0x24,
+            (Repeatability::Low, Mps::_0_5) => 0x2F,
+            (Repeatability::High, Mps::_1) => 0x30,
+            (Repeatability::Medium, Mps::_1) => 0x26,
+            (Repeatability::Low, Mps::_1) => 0x2D,
+            (Repeatability::High, Mps::_2) => 0x36,
+            (Repeatability::Medium, Mps::_2) => 0x20,
+            (Repeatability::Low, Mps::_2) => 0x2B,
+            (Repeatability::High, Mps::_4) => 0x34,
+            (Repeatability::Medium, Mps::_4) => 0x22,
+            (Repeatability::Low, Mps::_4) => 0x29,
+            (Repeatability::High, Mps::_10) => 0x37,
+            (Repeatability::Medium, Mps::_10) => 0x21,
+            (Repeatability::Low, Mps::_10) => 0x2A,
+        };
+
+        self.i2c.write(self.address, &[msb, lsb]).map_err(|e| Sts32_33DisError::I2C(e))?;
+
+        Ok(())
+    }
+
+    // FIXME: pub と non-pub をイイ感じにする
+    pub fn stop_periodic_measurement(&mut self) -> Result<(), Sts32_33DisError<E>> {
+        self.i2c.write(self.address, &[0x30, 0x93]).map_err(|e| Sts32_33DisError::I2C(e))?;
+
+        Ok(())
+    }
+
+    // FIXME: pub と non-pub をイイ感じにする
+    pub fn fetch_data(&mut self) -> Result<[u8; 2], Sts32_33DisError<E>> {
+        let mut data = [0; 3];
+
+        self.i2c.write(self.address, &[0xE0, 0x00]).map_err(|e| Sts32_33DisError::I2C(e))?;
+        self.i2c.read(self.address, &mut data).map_err(|e| Sts32_33DisError::I2C(e))?;
+
+        // TODO: Check CRC
+
+        Ok(data[0..2].try_into().unwrap())
     }
 }
